@@ -15,14 +15,6 @@ const courses = [
   { id: 4, code: 'DES 215', title: 'Interaction Design', instructor: 'Maya Bennett', icon: '✦', color: '#4379cf', soft: '#e6eefb', progress: 42, next: 'Prototype critique', meeting: 'Fri · 2:00 PM' },
 ];
 
-const starterTasks = [
-  { id: 1, title: 'Problem Set 6', course: 'MATH 204', courseId: 2, due: 'Today', time: '11:59 PM', priority: 'High', done: false },
-  { id: 2, title: 'Graph Traversal Lab', course: 'CS 301', courseId: 1, due: 'Tomorrow', time: '5:00 PM', priority: 'High', done: false },
-  { id: 3, title: 'Reading response', course: 'PSY 110', courseId: 3, due: 'Sep 28', time: '9:00 AM', priority: 'Medium', done: false },
-  { id: 4, title: 'Wireframe iteration', course: 'DES 215', courseId: 4, due: 'Sep 30', time: '2:00 PM', priority: 'Medium', done: false },
-  { id: 5, title: 'Quiz: Vector spaces', course: 'MATH 204', courseId: 2, due: 'Oct 02', time: '11:59 PM', priority: 'Low', done: false },
-];
-
 const nav = [
   [LayoutGrid, 'Overview'], [BookOpen, 'My courses'], [ClipboardCheck, 'Assignments'],
   [StickyNote, 'Notes'], [BarChart3, 'Progress'],
