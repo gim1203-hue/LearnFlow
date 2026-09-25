@@ -28,12 +28,13 @@ const nav = [
   [StickyNote, 'Notes'], [BarChart3, 'Progress'],
 ];
 
-function usePersistentTasks() {
+function usePersistentTasks(userId) {
+  const storageKey = `learnflow-tasks-${userId}`;
   const [tasks, setTasks] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('learnflow-tasks')) || starterTasks; }
+    try { return JSON.parse(localStorage.getItem(storageKey)) || starterTasks; }
     catch { return starterTasks; }
   });
-  useEffect(() => localStorage.setItem('learnflow-tasks', JSON.stringify(tasks)), [tasks]);
+  useEffect(() => localStorage.setItem(storageKey, JSON.stringify(tasks)), [storageKey, tasks]);
   return [tasks, setTasks];
 }
 
@@ -181,7 +182,7 @@ function AuthGate() {
 }
 
 function App({ user, onLogout }) {
-  const [tasks, setTasks] = usePersistentTasks();
+  const [tasks, setTasks] = usePersistentTasks(user.id);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
   const [sidebar, setSidebar] = useState(false);
