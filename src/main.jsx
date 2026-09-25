@@ -30,6 +30,16 @@ function usePersistentTasks(userId) {
   return [tasks, setTasks];
 }
 
+function usePersistentCourses(userId) {
+  const storageKey = `learnflow-courses-v1-${userId}`;
+  const [userCourses, setUserCourses] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(storageKey)) || []; }
+    catch { return []; }
+  });
+  useEffect(() => localStorage.setItem(storageKey, JSON.stringify(userCourses)), [storageKey, userCourses]);
+  return [userCourses, setUserCourses];
+}
+
 function Sidebar({ open, setOpen, active, setActive, user, displayName, onLogout }) {
   return <aside className={`sidebar ${open ? 'open' : ''}`}>
     <div className="brand"><div className="brand-mark"><span></span><span></span><span></span></div><strong>learnflow</strong><button className="mobile-close" onClick={() => setOpen(false)}><X size={20}/></button></div>
@@ -69,8 +79,8 @@ function CourseCard({ course, onOpen }) {
   </article>
 }
 
-function TaskRow({ task, toggle, remove }) {
-  const c = courses.find(x => x.id === task.courseId) || courses[0];
+function TaskRow({ task, toggle, remove, courseList }) {
+  const c = courseList.find(x => x.id === task.courseId) || { color: '#7563e9' };
   return <div className={`task-row ${task.done ? 'done' : ''}`}>
     <button className="check" onClick={() => toggle(task.id)}>{task.done && <Check size={14}/>}</button>
     <div className="task-main"><strong>{task.title}</strong><span><i style={{background:c.color}}></i>{task.course}</span></div>
@@ -80,33 +90,50 @@ function TaskRow({ task, toggle, remove }) {
   </div>
 }
 
-function AddTaskDialog({ addTask }) {
-  const [form, setForm] = useState({title:'', courseId:1, due:'Tomorrow', time:'5:00 PM', priority:'Medium'});
-  const submit = e => { e.preventDefault(); if (!form.title.trim()) return; const c = courses.find(x => x.id === Number(form.courseId)); addTask({...form, courseId:Number(form.courseId), course:c.code}); e.currentTarget.closest('dialog').close(); setForm({...form,title:''}); };
+function AddTaskDialog({ addTask, courseList }) {
+  const [form, setForm] = useState({title:'', courseId:'', due:'Tomorrow', time:'5:00 PM', priority:'Medium'});
+  const submit = e => { e.preventDefault(); if (!form.title.trim()) return; const c = courseList.find(x => x.id === Number(form.courseId)); addTask({...form, courseId:c?.id || null, course:c?.code || 'Personal'}); e.currentTarget.closest('dialog').close(); setForm({...form,title:''}); };
   return <dialog id="addTask"><form onSubmit={submit}>
     <div className="dialog-head"><div><span className="eyebrow">Stay on track</span><h2>Add a new task</h2></div><button type="button" onClick={() => document.getElementById('addTask').close()}><X/></button></div>
     <label>Task name<input autoFocus value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="e.g. Finish chapter notes"/></label>
-    <div className="form-grid"><label>Course<select value={form.courseId} onChange={e=>setForm({...form,courseId:e.target.value})}>{courses.map(c=><option value={c.id} key={c.id}>{c.code} — {c.title}</option>)}</select></label><label>Priority<select value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})}><option>Low</option><option>Medium</option><option>High</option></select></label></div>
+    <div className="form-grid"><label>Course<select value={form.courseId} onChange={e=>setForm({...form,courseId:e.target.value})}><option value="">Personal task</option>{courseList.map(c=><option value={c.id} key={c.id}>{c.code} — {c.title}</option>)}</select></label><label>Priority<select value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})}><option>Low</option><option>Medium</option><option>High</option></select></label></div>
     <div className="form-grid"><label>Due date<input value={form.due} onChange={e=>setForm({...form,due:e.target.value})}/></label><label>Time<input value={form.time} onChange={e=>setForm({...form,time:e.target.value})}/></label></div>
     <button className="submit-task"><Plus size={18}/> Add task</button>
   </form></dialog>
 }
 
-function WorkspacePage({ active, courses, tasks, query, toggle, remove, displayName, user, onOpenCourse, onNotice }) {
+function AddCourseDialog({ addCourse }) {
+  const [form, setForm] = useState({ title: '', code: '', instructor: '' });
+  const submit = event => {
+    event.preventDefault();
+    if (!form.title.trim() || !form.code.trim()) return;
+    addCourse({ ...form, id: Date.now(), icon: '•', color: '#7563e9', soft: '#e9e5ff', progress: 0, next: 'Add your first lesson', meeting: 'Schedule not set' });
+    event.currentTarget.closest('dialog').close();
+    setForm({ title: '', code: '', instructor: '' });
+  };
+  return <dialog id="addCourse"><form onSubmit={submit}>
+    <div className="dialog-head"><div><span className="eyebrow">Your workspace</span><h2>Add a course</h2></div><button type="button" onClick={() => document.getElementById('addCourse').close()}><X/></button></div>
+    <label>Course name<input autoFocus value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} placeholder="e.g. Web Development" required /></label>
+    <div className="form-grid"><label>Course code<input value={form.code} onChange={event => setForm({ ...form, code: event.target.value })} placeholder="e.g. WEB 101" required /></label><label>Instructor<input value={form.instructor} onChange={event => setForm({ ...form, instructor: event.target.value })} placeholder="Optional" /></label></div>
+    <button className="submit-task"><Plus size={18}/> Add course</button>
+  </form></dialog>;
+}
+
+function WorkspacePage({ active, courses, tasks, query, toggle, remove, displayName, user, onOpenCourse, onNotice, onAddCourse }) {
   const matchingCourses = courses.filter(course => `${course.title} ${course.code} ${course.instructor}`.toLowerCase().includes(query.toLowerCase()));
   const matchingTasks = tasks.filter(task => `${task.title} ${task.course}`.toLowerCase().includes(query.toLowerCase()));
 
   if (active === 'My courses') {
     return <>
-      <section className="page-heading"><div><span className="eyebrow">Workspace</span><h1>My courses</h1><p>Keep an eye on every class and your current progress.</p></div><span className="result-count">{matchingCourses.length} courses</span></section>
-      <div className="courses-grid workspace-grid">{matchingCourses.map(course => <CourseCard course={course} onOpen={onOpenCourse} key={course.id}/>)}{!matchingCourses.length && <div className="empty">No courses match “{query}”.</div>}</div>
+      <section className="page-heading"><div><span className="eyebrow">Workspace</span><h1>My courses</h1><p>Keep an eye on every class and your current progress.</p></div><button className="add-btn page-action" onClick={() => document.getElementById('addCourse').showModal()}><Plus size={18}/> Add course</button></section>
+      <div className="courses-grid workspace-grid">{matchingCourses.map(course => <CourseCard course={course} onOpen={onOpenCourse} key={course.id}/>)}{!matchingCourses.length && <div className="empty course-empty"><BookOpen size={25}/> {query ? `No courses match “${query}”.` : 'Your courses will appear here when you add them.'}</div>}</div>
     </>;
   }
 
   if (active === 'Assignments') {
     return <>
       <section className="page-heading"><div><span className="eyebrow">Workspace</span><h1>Assignments</h1><p>Stay ahead of deadlines and keep your momentum.</p></div><span className="result-count">{matchingTasks.filter(task => !task.done).length} open</span></section>
-      <div className="panel full-panel"><div className="task-list workspace-task-list">{matchingTasks.map(task => <TaskRow task={task} toggle={toggle} remove={remove} key={task.id}/>)}{!matchingTasks.length && <div className="empty">No assignments match “{query}”.</div>}</div></div>
+      <div className="panel full-panel"><div className="task-list workspace-task-list">{matchingTasks.map(task => <TaskRow task={task} toggle={toggle} remove={remove} courseList={courses} key={task.id}/>)}{!matchingTasks.length && <div className="empty">{query ? `No assignments match “${query}”.` : 'Your assignments will appear here when you add them.'}</div>}</div></div>
     </>;
   }
 
@@ -177,6 +204,7 @@ function AuthGate() {
 function App({ user, onLogout }) {
   const displayName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Student';
   const [tasks, setTasks] = usePersistentTasks(user.id);
+  const [userCourses, setUserCourses] = usePersistentCourses(user.id);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
   const [sidebar, setSidebar] = useState(false);
@@ -185,42 +213,39 @@ function App({ user, onLogout }) {
   const filtered = useMemo(() => tasks.filter(t => !t.done && (filter === 'All' || t.priority === filter) && `${t.title} ${t.course}`.toLowerCase().includes(query.toLowerCase())), [tasks, filter, query]);
   const toggle = id => setTasks(ts => ts.map(t => t.id === id ? {...t, done:!t.done} : t));
   const addTask = data => setTasks(ts => [{...data,id:Date.now(),done:false},...ts]);
+  const addCourse = course => setUserCourses(current => [...current, course]);
   const removeTask = id => setTasks(ts => ts.filter(task => task.id !== id));
-  const visibleCourses = courses.filter(c => `${c.title} ${c.code} ${c.instructor}`.toLowerCase().includes(query.toLowerCase()));
+  const visibleCourses = userCourses.filter(c => `${c.title} ${c.code} ${c.instructor}`.toLowerCase().includes(query.toLowerCase()));
 
   return <div className="app-shell">
     <Sidebar open={sidebar} setOpen={setSidebar} active={active} setActive={setActive} user={user} displayName={displayName} onLogout={onLogout}/>{sidebar && <div className="scrim" onClick={()=>setSidebar(false)}/>} 
     <main><Header query={query} setQuery={setQuery} setOpen={setSidebar} onNotice={setNotice}/>
       {notice && <button className="notice-toast" onClick={() => setNotice('')}>{notice} ×</button>}
       <div className="content">
-        {active !== 'Overview' ? <WorkspacePage active={active} courses={courses} tasks={tasks} query={query} toggle={toggle} remove={removeTask} displayName={displayName} user={user} onOpenCourse={() => setActive('My courses')} onNotice={setNotice}/> : <>
+        {active !== 'Overview' ? <WorkspacePage active={active} courses={userCourses} tasks={tasks} query={query} toggle={toggle} remove={removeTask} displayName={displayName} user={user} onOpenCourse={() => setActive('My courses')} onNotice={setNotice} onAddCourse={addCourse}/> : <>
         <section className="welcome"><div><span className="eyebrow">Thursday, September 24</span><h1>Good morning, {displayName} <span>👋</span></h1><p>Small steps add up. Here's what needs your attention today.</p></div><div className="streak"><div><Flame size={22}/></div><span><b>12 day</b> study streak</span></div></section>
         <section className="stats-grid">
-          <div className="stat-card"><div className="stat-icon purple"><BookOpen/></div><div><span>Active courses</span><strong>4</strong><small><b>2</b> classes today</small></div></div>
+          <div className="stat-card"><div className="stat-icon purple"><BookOpen/></div><div><span>Active courses</span><strong>{userCourses.length}</strong><small>Your personal courses</small></div></div>
           <div className="stat-card"><div className="stat-icon coral"><ClipboardCheck/></div><div><span>Tasks due</span><strong>{tasks.filter(t=>!t.done).length}</strong><small><b>2</b> due this week</small></div></div>
-          <div className="stat-card"><div className="stat-icon green"><Clock3/></div><div><span>Study time</span><strong>6h 40m</strong><small><b>+18%</b> from last week</small></div></div>
-          <div className="stat-card grade"><div className="stat-icon blue"><BarChart3/></div><div><span>Average grade</span><strong>88.4%</strong><small><b>+2.4%</b> this semester</small></div><svg viewBox="0 0 100 36"><path d="M2 31 C18 29, 20 18, 34 21 S52 28, 63 15 S78 19, 98 3"/><path className="area" d="M2 31 C18 29, 20 18, 34 21 S52 28, 63 15 S78 19, 98 3 L98 36 L2 36Z"/></svg></div>
+          <div className="stat-card"><div className="stat-icon green"><Clock3/></div><div><span>Study time</span><strong>0h 00m</strong><small>Start your first session</small></div></div>
+          <div className="stat-card grade"><div className="stat-icon blue"><BarChart3/></div><div><span>Average grade</span><strong>--</strong><small>Add courses to track progress</small></div></div>
         </section>
         <section className="section-block"><div className="section-title"><div><h2>Your courses</h2><p>Pick up where you left off</p></div><button className="view-all" onClick={() => setActive('My courses')}>View all <ChevronRight size={17}/></button></div>
-          <div className="courses-grid">{visibleCourses.map(c=><CourseCard course={c} onOpen={() => setActive('My courses')} key={c.id}/>)}{visibleCourses.length===0&&<div className="empty">No courses match “{query}”.</div>}</div>
+          <div className="courses-grid">{visibleCourses.map(c=><CourseCard course={c} onOpen={() => setActive('My courses')} key={c.id}/>)}{visibleCourses.length===0&&<div className="empty course-empty"><BookOpen size={25}/> {query ? `No courses match “${query}”.` : 'This is your clean workspace. Add your first course from My courses.'}</div>}</div>
         </section>
         <section className="bottom-grid">
           <div className="assignments panel"><div className="section-title"><div><h2>Upcoming assignments</h2><p>Your next deadlines</p></div><button className="filter-btn" onClick={() => setFilter(filter === 'All' ? 'High' : 'All')}><SlidersHorizontal size={16}/> {filter === 'All' ? 'High priority' : 'Show all'}</button></div>
             <div className="filter-tabs">{['All','High','Medium','Low'].map(f=><button className={filter===f?'active':''} onClick={()=>setFilter(f)} key={f}>{f}</button>)}</div>
-            <div className="task-list">{filtered.slice(0,5).map(t=><TaskRow task={t} toggle={toggle} remove={removeTask} key={t.id}/>)}{!filtered.length&&<div className="empty"><Check size={25}/> You’re all caught up.</div>}</div>
+            <div className="task-list">{filtered.slice(0,5).map(t=><TaskRow task={t} toggle={toggle} remove={removeTask} courseList={userCourses} key={t.id}/>)}{!filtered.length&&<div className="empty"><Check size={25}/> {query ? `No assignments match “${query}”.` : 'Your workspace is clear. Add your first task.'}</div>}</div>
           </div>
-          <aside className="today panel"><div className="section-title"><div><h2>Today's schedule</h2><p>Thursday, Sep 24</p></div><button><CalendarDays size={19}/></button></div>
-            <div className="timeline">
-              <div className="timeline-item"><time>9:00</time><span style={{background:'#39a48c'}}></span><div><small>PSY 110</small><strong>Cognitive Psychology</strong><em>Room 204 · 60 min</em></div></div>
-              <div className="timeline-item active"><time>11:30</time><span style={{background:'#7968e8'}}></span><div><small>FOCUS SESSION</small><strong>Graph Algorithms</strong><em>Library · 90 min</em></div><button><Play size={15} fill="currentColor"/></button></div>
-              <div className="timeline-item"><time>2:00</time><span style={{background:'#4379cf'}}></span><div><small>DES 215</small><strong>Interaction Design</strong><em>Studio 3 · 75 min</em></div></div>
-            </div>
-            <button className="schedule-btn">Open full schedule <ArrowUpRight size={16}/></button>
+          <aside className="today panel"><div className="section-title"><div><h2>Today's schedule</h2><p>Your personal schedule</p></div><button onClick={() => setNotice('Schedule will be available when you add a study session.')}><CalendarDays size={19}/></button></div>
+            <div className="empty schedule-empty"><CalendarDays size={25}/> No sessions scheduled yet.</div>
+            <button className="schedule-btn" onClick={() => setNotice('Add a course or task to start planning your schedule.')}>Add to schedule <Plus size={16}/></button>
           </aside>
         </section>
         </>}
       </div>
-    </main><AddTaskDialog addTask={addTask}/>
+    </main><AddTaskDialog addTask={addTask} courseList={userCourses}/><AddCourseDialog addCourse={addCourse}/>
   </div>
 }
 
