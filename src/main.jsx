@@ -6,6 +6,7 @@ import {
   Check, ChevronRight, Play, Flame, Target, X, Menu, SlidersHorizontal
 } from 'lucide-react';
 import './styles.css';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
 
 const courses = [
   { id: 1, code: 'CS 301', title: 'Data Structures', instructor: 'Dr. Alex Morgan', icon: '⌘', color: '#7968e8', soft: '#eeeafe', progress: 76, next: 'Graph algorithms', meeting: 'Tue · 10:00 AM' },
@@ -36,7 +37,7 @@ function usePersistentTasks() {
   return [tasks, setTasks];
 }
 
-function Sidebar({ open, setOpen, active, setActive }) {
+function Sidebar({ open, setOpen, active, setActive, user, onLogout }) {
   return <aside className={`sidebar ${open ? 'open' : ''}`}>
     <div className="brand"><div className="brand-mark"><span></span><span></span><span></span></div><strong>learnflow</strong><button className="mobile-close" onClick={() => setOpen(false)}><X size={20}/></button></div>
     <nav>
@@ -52,7 +53,7 @@ function Sidebar({ open, setOpen, active, setActive }) {
       <div className="mini-progress"><span></span></div>
       <small>6h 40m of 10h</small>
     </div>
-    <div className="profile"><div className="avatar">MK</div><div><strong>Max Keller</strong><span>Computer Science</span></div><MoreHorizontal size={19}/></div>
+    <div className="profile"><div className="avatar">{(user?.email?.[0] || 'U').toUpperCase()}</div><div><strong>{user?.email || 'Student'}</strong><span>LearnFlow student</span></div><button className="logout-btn" onClick={onLogout} title="Log out">Log out</button></div>
   </aside>
 }
 
@@ -137,7 +138,49 @@ function WorkspacePage({ active, courses, tasks, query, toggle }) {
   </>;
 }
 
-function App() {
+function AuthScreen() {
+  const [mode, setMode] = useState('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async event => {
+    event.preventDefault();
+    setMessage('');
+    if (password.length < 6) { setMessage('Use a password with at least 6 characters.'); return; }
+    setBusy(true);
+    const result = mode === 'login'
+      ? await supabase.auth.signInWithPassword({ email, password })
+      : await supabase.auth.signUp({ email, password });
+    setBusy(false);
+    if (result.error) setMessage(result.error.message);
+    else if (mode === 'signup') setMessage('Account created. Check your email if confirmation is enabled.');
+  };
+
+  return <main className="auth-shell"><section className="auth-card"><div className="auth-brand"><div className="brand-mark"><span></span><span></span><span></span></div><strong>learnflow</strong></div><span className="eyebrow">Student learning dashboard</span><h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1><p>{mode === 'login' ? 'Sign in to continue your learning journey.' : 'Start organizing your courses, tasks, and study goals.'}</p><form onSubmit={submit} className="auth-form"><label>Email<input type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="you@example.com" required /></label><label>Password<input type="password" value={password} onChange={event => setPassword(event.target.value)} placeholder="At least 6 characters" required minLength="6" /></label>{message && <p className="auth-message">{message}</p>}<button className="submit-task" disabled={busy}>{busy ? 'Please wait...' : mode === 'login' ? 'Sign in' : 'Create account'}</button></form><button className="auth-switch" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setMessage(''); }}>{mode === 'login' ? 'New to LearnFlow? Create an account' : 'Already have an account? Sign in'}</button></section></main>;
+}
+
+function SetupScreen() {
+  return <main className="auth-shell"><section className="auth-card"><div className="auth-brand"><div className="brand-mark"><span></span><span></span><span></span></div><strong>learnflow</strong></div><span className="eyebrow">One setup step remains</span><h1>Connect your account system</h1><p>Add the Supabase values to a local `.env.local` file, then restart the Vite server.</p><pre>VITE_SUPABASE_URL=https://totkgjjbaliukfblaper.supabase.co{`\n`}VITE_SUPABASE_ANON_KEY=your-public-key</pre><p className="setup-note">Find the public key in Supabase: Project Settings → API. Never use or share the service-role key.</p></section></main>;
+}
+
+function AuthGate() {
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return undefined; }
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setLoading(false); });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
+    return () => listener.subscription.unsubscribe();
+  }, []);
+  if (!isSupabaseConfigured) return <SetupScreen />;
+  if (loading) return <main className="auth-shell"><p>Loading your account...</p></main>;
+  if (!session) return <AuthScreen />;
+  return <App user={session.user} onLogout={() => supabase.auth.signOut()} />;
+}
+
+function App({ user, onLogout }) {
   const [tasks, setTasks] = usePersistentTasks();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
@@ -149,7 +192,7 @@ function App() {
   const visibleCourses = courses.filter(c => `${c.title} ${c.code} ${c.instructor}`.toLowerCase().includes(query.toLowerCase()));
 
   return <div className="app-shell">
-    <Sidebar open={sidebar} setOpen={setSidebar} active={active} setActive={setActive}/>{sidebar && <div className="scrim" onClick={()=>setSidebar(false)}/>} 
+    <Sidebar open={sidebar} setOpen={setSidebar} active={active} setActive={setActive} user={user} onLogout={onLogout}/>{sidebar && <div className="scrim" onClick={()=>setSidebar(false)}/>} 
     <main><Header query={query} setQuery={setQuery} setOpen={setSidebar}/>
       <div className="content">
         {active !== 'Overview' ? <WorkspacePage active={active} courses={courses} tasks={tasks} query={query} toggle={toggle}/> : <>
@@ -183,4 +226,4 @@ function App() {
   </div>
 }
 
-createRoot(document.getElementById('root')).render(<App/>);
+createRoot(document.getElementById('root')).render(<AuthGate/>);
