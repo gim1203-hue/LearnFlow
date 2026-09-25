@@ -40,12 +40,12 @@ function usePersistentCourses(userId) {
   return [userCourses, setUserCourses];
 }
 
-function Sidebar({ open, setOpen, active, setActive, user, displayName, onLogout }) {
+function Sidebar({ open, setOpen, active, setActive, user, displayName, assignmentCount, onLogout }) {
   return <aside className={`sidebar ${open ? 'open' : ''}`}>
     <div className="brand"><div className="brand-mark"><span></span><span></span><span></span></div><strong>learnflow</strong><button className="mobile-close" onClick={() => setOpen(false)}><X size={20}/></button></div>
     <nav>
       <p className="nav-label">Workspace</p>
-      {nav.map(([Icon, label]) => <button key={label} className={active === label ? 'active' : ''} onClick={() => {setActive(label); setOpen(false)}}><Icon size={19}/><span>{label}</span>{label === 'Assignments' && <b>5</b>}</button>)}
+      {nav.map(([Icon, label]) => <button key={label} className={active === label ? 'active' : ''} onClick={() => {setActive(label); setOpen(false)}}><Icon size={19}/><span>{label}</span>{label === 'Assignments' && <b>{assignmentCount}</b>}</button>)}
       <p className="nav-label lower">Manage</p>
       <button onClick={() => setActive('Settings')} className={active === 'Settings' ? 'active' : ''}><Settings size={19}/><span>Settings</span></button>
     </nav>
@@ -218,7 +218,7 @@ function App({ user, onLogout }) {
   const visibleCourses = userCourses.filter(c => `${c.title} ${c.code} ${c.instructor}`.toLowerCase().includes(query.toLowerCase()));
 
   return <div className="app-shell">
-    <Sidebar open={sidebar} setOpen={setSidebar} active={active} setActive={setActive} user={user} displayName={displayName} onLogout={onLogout}/>{sidebar && <div className="scrim" onClick={()=>setSidebar(false)}/>} 
+    <Sidebar open={sidebar} setOpen={setSidebar} active={active} setActive={setActive} user={user} displayName={displayName} assignmentCount={tasks.filter(task => !task.done).length} onLogout={onLogout}/>{sidebar && <div className="scrim" onClick={()=>setSidebar(false)}/>} 
     <main><Header query={query} setQuery={setQuery} setOpen={setSidebar} onNotice={setNotice}/>
       {notice && <button className="notice-toast" onClick={() => setNotice('')}>{notice} ×</button>}
       <div className="content">
